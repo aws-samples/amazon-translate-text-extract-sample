@@ -1,0 +1,206 @@
+AWSTemplateFormatVersion: 2010-09-09
+Parameters:
+  TargetLanguageCode:
+    Type: String
+    Default: de
+  InputBucketName:
+    Type: String
+  OutputBucketName:
+    Type: String
+  IAMRoleName:
+    Type: String
+    Default: TranslationLambdaExecRole
+Resources:
+  IAMR1LC1M:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      RoleName: !Ref IAMRoleName
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Path: /
+      Policies:
+        - PolicyName: AWSLambdaBasicExecutionRole
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource: '*'
+        - PolicyName: AmazonS3FullAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action: 's3:*'
+                Resource:
+                  - !Sub 
+                    - 'arn:aws:s3:::${InputBucket}/*'
+                    - InputBucket: !Ref InputBucketName
+                  - !Sub 
+                    - 'arn:aws:s3:::${OutputBucket}/*'
+                    - OutputBucket: !Ref OutputBucketName
+        - PolicyName: TranslateFullAccess
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - 'translate:*'
+                  - 'comprehend:DetectDominantLanguage'
+                  - 'cloudwatch:GetMetricStatistics'
+                  - 'cloudwatch:ListMetrics'
+                Effect: Allow
+                Resource: '*'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: ee027ee6-e6da-4e3d-b373-073871b9a231
+  LF4L95L:
+    Type: 'AWS::Lambda::Function'
+    Properties:
+      FunctionName: trigger-translation
+      Handler: index.lambda_handler
+      Runtime: python3.7
+      Timeout: 900
+      Environment:
+        Variables:
+          SourceLanguageCode: auto
+          TargetBucketName: !Ref OutputBucketName
+          TargetFolder: translated/
+          TargetLanguageCode: !Ref TargetLanguageCode
+      Role: !GetAtt 
+        - IAMR1LC1M
+        - Arn
+      Code:
+        ZipFile: |
+            import boto3
+            from botocore.exceptions import ClientError
+            import os
+            import sys
+            
+            def lambda_handler(event, context):
+                
+                #boto3 connections
+                s3 = boto3.resource('s3')
+                translate = boto3.client('translate')
+            
+                for record in event['Records']:
+                    
+                    #defining variables
+                    SOURCE_BUCKET_NAME = record['s3']['bucket']['name']
+                    TARGET_BUCKET_NAME = os.environ['TargetBucketName']
+                    download_key = record['s3']['object']['key']
+                    object_name = download_key.split("/")[-1]
+                    upload_key = os.environ['TargetFolder'] + object_name
+                    read_path = '/tmp/' + object_name
+                    write_path = '/tmp/translated-' + object_name
+            
+                    #creating and opening a new txt file which is where the translated text will be put
+                    new_file = open(write_path, "w+")
+                    
+                    #downloading the file to be translated
+                    s3.Bucket(SOURCE_BUCKET_NAME).download_file(download_key, read_path)
+                    
+                    with open(read_path, "r") as text_file:
+                        #reading all the content in one step
+                        all_content = text_file.read() 
+                        #splitting the content in paragraphs and storing it in an array
+                        content_array = all_content.split("\n\n")
+            
+                    #translating the text using Amazon Translate
+                    for i in range(len(content_array)):
+                        if content_array[i] != "":
+                            if sys.getsizeof(content_array[i]) > 10000:
+                                a = content_array[i].split()[:5]
+                                print ("Error occurred - please break down the following paragraph into smaller chunks in order to avoid hitting Amazon Translate API limits.")
+                                print ("Paragraph starting with\""+' '.join(a)+"...\"")
+                            else:
+            
+                                try:
+                                    result = translate.translate_text(Text=content_array[i],
+                                                      SourceLanguageCode = os.environ['SourceLanguageCode'],
+                                                      TargetLanguageCode = os.environ['TargetLanguageCode'])
+                                except ClientError as e:
+                                    print ("Unexpected error: %s" % e)
+            
+                            #writing the translated text to local document
+                            new_file.write(result["TranslatedText"])
+            
+                            """
+                            #===if you want to perform the translation operation by each sentence, uncomment this segment of the code===
+                            #splitting the content by sentences (end of a sentence identified by full stop ".") and storing it in an array
+                                sentence_array = content_array[i].split(".")
+                                for j in range(len(sentence_array)):
+                                    if sentence_array[j] != "":
+                                        try:
+                                            result = translate.translate_text(Text=sentence_array[j],
+                                                              SourceLanguageCode = os.environ['SourceLanguageCode'],
+                                                              TargetLanguageCode = os.environ['TargetLanguageCode'])
+                                        except ClientError as e:
+                                            print ("Unexpected error: %s" % e)
+                                    new_file.write(result["TranslatedText"])
+                                    new_file.write(".")
+                            """        
+                            new_file.write("\n\n")
+            
+                    new_file.close()
+            
+                    #writing the translated document to S3
+                    s3.Bucket(TARGET_BUCKET_NAME).upload_file(write_path, upload_key)
+                    
+                    #removing the local files
+                    os.remove(read_path)
+                    os.remove(write_path)
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: c0109fed-1037-4d34-bf38-c83aeb88368f
+  S3B3UNSQ:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref InputBucketName
+      NotificationConfiguration:
+        LambdaConfigurations:
+          - Event: 's3:ObjectCreated:Put'
+            Function: !GetAtt 
+              - LF4L95L
+              - Arn
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 83b4e98a-94e6-4c86-978f-69f1420ff6d6
+  BucketPermission:
+    Type: 'AWS::Lambda::Permission'
+    Properties:
+      Action: 'lambda:InvokeFunction'
+      FunctionName: !Ref LF4L95L
+      Principal: s3.amazonaws.com
+      SourceAccount: !Ref 'AWS::AccountId'
+      SourceArn: !Sub 'arn:aws:s3:::${InputBucketName}'
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 63b6f1c7-72aa-4788-87ea-26c2de8a5082
+  S3B5BC28:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Ref OutputBucketName
+    Metadata:
+      'AWS::CloudFormation::Designer':
+        id: 0d97a12c-5ec6-4c10-aa28-1e9ca5b0e9a8
+Outputs:
+  IAMRoleExecutionForLambdaARN:
+    Description: The ARN of the IAM role that was created for the Lambda to assume
+    Value: !GetAtt 
+      - IAMR1LC1M
+      - Arn
+  LambdaFunctionArn:
+    Description: The ARN of the Lambda function
+    Value: !GetAtt 
+      - LF4L95L
+      - Arn
