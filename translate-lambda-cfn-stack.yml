@@ -74,7 +74,6 @@ Resources:
         Variables:
           SourceLanguageCode: auto
           TargetBucketName: !Ref OutputBucketName
-          TargetFolder: translated/
           TargetLanguageCode: !Ref TargetLanguageCode
       Role: !GetAtt 
         - IAMR1LC1M
@@ -99,7 +98,8 @@ Resources:
                     TARGET_BUCKET_NAME = os.environ['TargetBucketName']
                     download_key = record['s3']['object']['key']
                     object_name = download_key.split("/")[-1]
-                    upload_key = os.environ['TargetFolder'] + object_name
+                    object_input_path = download_key.split("/")[0]
+                    upload_key = os.environ['TargetLanguageCode'] +"/" + object_input_path + "/" + object_name
                     read_path = '/tmp/' + object_name
                     write_path = '/tmp/translated-' + object_name
             
@@ -113,12 +113,12 @@ Resources:
                         #reading all the content in one step
                         all_content = text_file.read() 
                         #splitting the content in paragraphs and storing it in an array
-                        content_array = all_content.split("\n\n")
+                        content_array = all_content.split("\n")
             
                     #translating the text using Amazon Translate
                     for i in range(len(content_array)):
                         if content_array[i] != "":
-                            if sys.getsizeof(content_array[i]) > 10000:
+                            if sys.getsizeof(content_array[i]) > 5000:
                                 a = content_array[i].split()[:5]
                                 print ("Error occurred - please break down the following paragraph into smaller chunks in order to avoid hitting Amazon Translate API limits.")
                                 print ("Paragraph starting with\""+' '.join(a)+"...\"")
@@ -134,22 +134,22 @@ Resources:
                             #writing the translated text to local document
                             new_file.write(result["TranslatedText"])
             
-                            """
                             #===if you want to perform the translation operation by each sentence, uncomment this segment of the code===
                             #splitting the content by sentences (end of a sentence identified by full stop ".") and storing it in an array
-                                sentence_array = content_array[i].split(".")
-                                for j in range(len(sentence_array)):
-                                    if sentence_array[j] != "":
-                                        try:
-                                            result = translate.translate_text(Text=sentence_array[j],
-                                                              SourceLanguageCode = os.environ['SourceLanguageCode'],
-                                                              TargetLanguageCode = os.environ['TargetLanguageCode'])
-                                        except ClientError as e:
-                                            print ("Unexpected error: %s" % e)
-                                    new_file.write(result["TranslatedText"])
-                                    new_file.write(".")
-                            """        
-                            new_file.write("\n\n")
+                            #    sentence_array = content_array[i].split(".")
+                            #    for j in range(len(sentence_array)):
+                            #        if sentence_array[j] != "":
+                            #            try:
+                            #                result = translate.translate_text(Text=sentence_array[j],
+                            #                                  SourceLanguageCode = os.environ['SourceLanguageCode'],
+                            #                                  TargetLanguageCode = os.environ['TargetLanguageCode'])
+                            #            except ClientError as e:
+                            #                print ("Unexpected error: %s" % e)
+                            #        new_file.write(result["TranslatedText"])
+                            #        new_file.write(".") 
+                            new_file.write("\n")
+                        else:
+                            new_file.write("\n")
             
                     new_file.close()
             
