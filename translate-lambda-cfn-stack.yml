@@ -10,7 +10,37 @@ Parameters:
   IAMRoleName:
     Type: String
     Default: TranslationLambdaExecRole
+  LambdaFunctionName:
+    Type: String
 Resources:
+  translateLambdaFunctionPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+              - Effect: Allow
+                Action:
+                  - 'logs:CreateLogGroup'
+                  - 'logs:CreateLogStream'
+                  - 'logs:PutLogEvents'
+                Resource:
+                  - !Sub
+                    - 'arn:aws:logs:${Region}:${AccountId}:log-group:/${LogGroupName}:*'
+                    - Region: !Ref "AWS::Region"
+                      AccountId: !Ref "AWS::AccountId"
+                      LogGroupName: !Ref LambdaFunctionName
+              - Effect: Allow
+                Action: 
+                  - 's3:GetObject'
+                  - 's3:PutObject'
+                Resource:
+                  - !Sub 
+                    - 'arn:aws:s3:::${InputBucket}/*'
+                    - InputBucket: !Ref InputBucketName
+                  - !Sub 
+                    - 'arn:aws:s3:::${OutputBucket}/*'
+                    - OutputBucket: !Ref OutputBucketName
   IAMR1LC1M:
     Type: 'AWS::IAM::Role'
     Properties:
@@ -25,48 +55,13 @@ Resources:
             Action:
               - 'sts:AssumeRole'
       Path: /
-      Policies:
-        - PolicyName: AWSLambdaBasicExecutionRole
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action:
-                  - 'logs:CreateLogGroup'
-                  - 'logs:CreateLogStream'
-                  - 'logs:PutLogEvents'
-                Resource: '*'
-        - PolicyName: AmazonS3FullAccess
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Effect: Allow
-                Action: 's3:*'
-                Resource:
-                  - !Sub 
-                    - 'arn:aws:s3:::${InputBucket}/*'
-                    - InputBucket: !Ref InputBucketName
-                  - !Sub 
-                    - 'arn:aws:s3:::${OutputBucket}/*'
-                    - OutputBucket: !Ref OutputBucketName
-        - PolicyName: TranslateFullAccess
-          PolicyDocument:
-            Version: 2012-10-17
-            Statement:
-              - Action:
-                  - 'translate:*'
-                  - 'comprehend:DetectDominantLanguage'
-                  - 'cloudwatch:GetMetricStatistics'
-                  - 'cloudwatch:ListMetrics'
-                Effect: Allow
-                Resource: '*'
-    Metadata:
-      'AWS::CloudFormation::Designer':
-        id: ee027ee6-e6da-4e3d-b373-073871b9a231
+      ManagedPolicyArns:
+        - !Ref translateLambdaFunctionPolicy
+        - arn:aws:iam::aws:policy/TranslateReadOnly
   LF4L95L:
     Type: 'AWS::Lambda::Function'
     Properties:
-      FunctionName: trigger-translation
+      FunctionName: !Ref LambdaFunctionName
       Handler: index.lambda_handler
       Runtime: python3.7
       Timeout: 900
@@ -159,9 +154,6 @@ Resources:
                     #removing the local files
                     os.remove(read_path)
                     os.remove(write_path)
-    Metadata:
-      'AWS::CloudFormation::Designer':
-        id: c0109fed-1037-4d34-bf38-c83aeb88368f
   S3B3UNSQ:
     Type: 'AWS::S3::Bucket'
     Properties:
@@ -172,9 +164,6 @@ Resources:
             Function: !GetAtt 
               - LF4L95L
               - Arn
-    Metadata:
-      'AWS::CloudFormation::Designer':
-        id: 83b4e98a-94e6-4c86-978f-69f1420ff6d6
   BucketPermission:
     Type: 'AWS::Lambda::Permission'
     Properties:
@@ -183,16 +172,10 @@ Resources:
       Principal: s3.amazonaws.com
       SourceAccount: !Ref 'AWS::AccountId'
       SourceArn: !Sub 'arn:aws:s3:::${InputBucketName}'
-    Metadata:
-      'AWS::CloudFormation::Designer':
-        id: 63b6f1c7-72aa-4788-87ea-26c2de8a5082
   S3B5BC28:
     Type: 'AWS::S3::Bucket'
     Properties:
       BucketName: !Ref OutputBucketName
-    Metadata:
-      'AWS::CloudFormation::Designer':
-        id: 0d97a12c-5ec6-4c10-aa28-1e9ca5b0e9a8
 Outputs:
   IAMRoleExecutionForLambdaARN:
     Description: The ARN of the IAM role that was created for the Lambda to assume
