@@ -1,7 +1,7 @@
 # Serverless Document Translation
 
 ## Summary
-This solution allows users to create a automatic pipeline to translate text documents from one language to another. You can use any of the supported *language pairs* offered by [Amazon Translate](https://docs.aws.amazon.com/translate/latest/dg/what-is.html).
+This solution allows users to create an automatic pipeline to translate text documents from one language to another. You can use any of the supported *language pairs* offered by [Amazon Translate](https://docs.aws.amazon.com/translate/latest/dg/what-is.html).
 
 
 ## Workflow
