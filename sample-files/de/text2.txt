@@ -1,0 +1,1 @@
+Neuronale maschinelle Übersetzung ist eine Form der Automatisierung der Sprachübersetzung, die Deep Learning-Modelle verwendet, um genauere und natürlichere klingende Übersetzung zu liefern als herkömmliche statistische und regelbasierte Übersetzungsalgorithmen.
