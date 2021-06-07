@@ -158,6 +158,8 @@ Resources:
     Type: 'AWS::S3::Bucket'
     Properties:
       BucketName: !Ref InputBucketName
+      VersioningConfiguration:
+        Status: Enabled
       NotificationConfiguration:
         LambdaConfigurations:
           - Event: 's3:ObjectCreated:Put'
@@ -176,6 +178,8 @@ Resources:
     Type: 'AWS::S3::Bucket'
     Properties:
       BucketName: !Ref OutputBucketName
+      VersioningConfiguration:
+        Status: Enabled
 Outputs:
   IAMRoleExecutionForLambdaARN:
     Description: The ARN of the IAM role that was created for the Lambda to assume
